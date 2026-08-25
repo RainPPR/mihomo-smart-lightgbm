@@ -1,0 +1,43 @@
+name: Update LightGBM Models
+
+on:
+  push:
+  schedule:
+    - cron: "0 0 */3 * *"  # 每 3 天跑一次，检查上游是否有更新
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-models:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download model files
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p models
+          for f in Model.bin Model-large.bin Model-middle.bin; do
+            echo "Downloading $f via gh api ..."
+            gh api -H "Accept: application/octet-stream" \
+              "repos/vernesong/mihomo/releases/assets/$(gh api repos/vernesong/mihomo/releases/tags/LightGBM-Model \
+                --jq '.assets[] | select(.name=="'"$f"'") | .id')" \
+              > "models/$f"
+            ls -la "models/$f"
+          done
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add models/
+          if git diff --cached --quiet; then
+            echo "No changes."
+          else
+            git commit -m "chore(models): update LightGBM model files [skip ci]"
+            git push
+          fi
